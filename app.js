@@ -33,6 +33,8 @@
 
   const zoomLabel = document.getElementById('zoomLevel');
   const BOTTOM_BUFFER = 100;
+  const TOP_BUFFER = 40;
+  const HORIZONTAL_BUFFER = 20;
 
   const coupleW=n=>n.partners.length*CW+(n.partners.length-1)*GAP;
   function measure(n){
@@ -104,7 +106,7 @@
 
   function setViewTransform(){
     stage.style.transform=`translate(${panX}px, ${panY}px) scale(${z})`;
-    stage.style.transformOrigin='center top';
+    stage.style.transformOrigin='center center';
     stage.style.marginTop = '0px';
   }
 
@@ -113,11 +115,11 @@
   }
 
   function clampPan(){
-    const maxX=Math.max(0,(stage.offsetWidth*z-viewport.clientWidth)/2);
-    const usableHeight = Math.max(0, viewport.clientHeight - BOTTOM_BUFFER);
-    const maxY=Math.max(0,(stage.offsetHeight*z-usableHeight));
-    panX=Math.max(-maxX,Math.min(maxX,panX));
-    panY=Math.max(-maxY,Math.min(0,panY));
+    const maxX = Math.max(0, (stage.offsetWidth * z - viewport.clientWidth) / 2 + HORIZONTAL_BUFFER);
+    const usableHeight = Math.max(200, viewport.clientHeight - TOP_BUFFER - BOTTOM_BUFFER);
+    const maxY = Math.max(0, (stage.offsetHeight * z - usableHeight) / 2 + (BOTTOM_BUFFER / 2));
+    panX = Math.max(-maxX, Math.min(maxX, panX));
+    panY = Math.max(-maxY, Math.min(maxY, panY));
   }
 
   function setZoom(value){
@@ -128,8 +130,8 @@
   }
 
   function fitToView(){
-    const viewportWidth = viewport.clientWidth - 40;
-    const viewportHeight = Math.max(140, viewport.clientHeight - BOTTOM_BUFFER);
+    const viewportWidth = Math.max(220, viewport.clientWidth - 40);
+    const viewportHeight = Math.max(260, viewport.clientHeight - TOP_BUFFER - BOTTOM_BUFFER);
     const stageWidth = stage.offsetWidth || W;
     const stageHeight = stage.offsetHeight || H;
     const zoomX = viewportWidth / stageWidth;
@@ -140,6 +142,14 @@
     clampPan();
     setViewTransform();
     updateZoomLabel();
+  }
+
+  function applyInitialView(){
+    updateZoomLabel();
+    requestAnimationFrame(() => {
+      fitToView();
+      setTimeout(fitToView, 200);
+    });
   }
 
   function zoomIn(){
@@ -188,6 +198,14 @@
       );
       const scaleFactor = nextDistance / pinchDistance;
       setZoom(pinchStartZoom * scaleFactor);
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const dx = midX - viewport.clientWidth / 2;
+      const dy = midY - viewport.clientHeight / 2;
+      panX += dx * 0.2;
+      panY += dy * 0.2;
+      clampPan();
+      setViewTransform();
     }
   }, { passive: false });
 
@@ -319,6 +337,12 @@
   window.fitToView = fitToView;
   window.downloadTree = downloadTree;
   window.toggleFullscreen = toggleFullscreen;
+
+  applyInitialView();
+  window.addEventListener('resize', () => {
+    fitToView();
+    updateZoomLabel();
+  });
 
   if (window.innerWidth <= 768) {
     setTimeout(fitToView, 150);
