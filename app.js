@@ -28,7 +28,7 @@
     if(!inAny&&!inFamilyAsChild.has(p.id)) roots.push(make(p.id));
   });
 
-  const stage=document.getElementById('stage'), svg=document.getElementById('lines');
+  const stage=document.getElementById('stage'), viewport=document.getElementById('viewport'), svg=document.getElementById('lines');
   if(!roots.length){stage.innerHTML='<p id="empty">No people yet. Add entries in family-data.js.</p>';return;}
 
   const coupleW=n=>n.partners.length*CW+(n.partners.length-1)*GAP;
@@ -89,9 +89,81 @@
 
   // zoom
   let z=1;
-  const wrap=document.getElementById('stage');
-  function setZoom(v){z=Math.min(1.6,Math.max(.4,v));wrap.style.transform=`scale(${z})`;wrap.style.marginBottom=(H*(z-1))+'px';wrap.style.marginRight=(W*(z-1))+'px';}
-  document.getElementById('zin').onclick=()=>setZoom(z+.1);
-  document.getElementById('zout').onclick=()=>setZoom(z-.1);
-  document.getElementById('zfit').onclick=()=>setZoom(Math.min(1,(document.getElementById('viewport').clientWidth-64)/W));
+  let panX=0;
+  let panY=0;
+  let isDragging=false;
+  let dragStartX=0;
+  let dragStartY=0;
+  let startPanX=0;
+  let startPanY=0;
+  let pinchDistance=null;
+  let pinchStartZoom=1;
+
+  function setViewTransform(){
+    stage.style.transform=`translate(${panX}px, ${panY}px) scale(${z})`;
+    stage.style.transformOrigin='center top';
+  }
+  function clampPan(){
+    const maxX=Math.max(0,(stage.offsetWidth*z-viewport.clientWidth)/2);
+    const maxY=Math.max(0,(stage.offsetHeight*z-viewport.clientHeight)/2);
+    panX=Math.max(-maxX,Math.min(maxX,panX));
+    panY=Math.max(-maxY,Math.min(maxY,panY));
+  }
+  function setZoom(value){
+    z=Math.min(2.8,Math.max(.5,value));
+    clampPan();
+    setViewTransform();
+  }
+
+  viewport.addEventListener('pointerdown',(e)=>{
+    if(e.pointerType==='touch'||e.pointerType==='pen'||e.pointerType==='mouse'){
+      if(e.pointerType==='mouse'&&e.button!==0) return;
+      isDragging=true;
+      dragStartX=e.clientX;
+      dragStartY=e.clientY;
+      startPanX=panX;
+      startPanY=panY;
+      viewport.setPointerCapture(e.pointerId);
+    }
+  });
+
+  viewport.addEventListener('pointermove',(e)=>{
+    if(!isDragging) return;
+    panX=startPanX+(e.clientX-dragStartX);
+    panY=startPanY+(e.clientY-dragStartY);
+    clampPan();
+    setViewTransform();
+  });
+
+  viewport.addEventListener('pointerup',()=>{isDragging=false;});
+  viewport.addEventListener('pointerleave',()=>{isDragging=false;});
+  viewport.addEventListener('wheel',(e)=>{
+    e.preventDefault();
+    const delta=e.deltaY<0?.08:-0.08;
+    setZoom(z+delta);
+  },{passive:false});
+
+  viewport.addEventListener('touchstart',(e)=>{
+    if(e.touches.length===2){
+      pinchDistance=Math.hypot(
+        e.touches[0].clientX-e.touches[1].clientX,
+        e.touches[0].clientY-e.touches[1].clientY
+      );
+      pinchStartZoom=z;
+    }
+  },{passive:true});
+  viewport.addEventListener('touchmove',(e)=>{
+    if(e.touches.length===2&&pinchDistance){
+      const nextDistance=Math.hypot(
+        e.touches[0].clientX-e.touches[1].clientX,
+        e.touches[0].clientY-e.touches[1].clientY
+      );
+      const scaleFactor=nextDistance/pinchDistance;
+      setZoom(pinchStartZoom*scaleFactor);
+    }
+  },{passive:true});
+  viewport.addEventListener('touchend',()=>{pinchDistance=null;pinchStartZoom=z;});
+
+  setZoom(1);
+  setViewTransform();
 })();
